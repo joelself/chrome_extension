@@ -16,7 +16,7 @@ function createStatusResultElement(response) {
   }
   
   /**
-   * Given an issue, create a row with columns containing an issue's icon, linkified summary, and description
+   * Given an issue, create a row with columns containing an issue"s icon, linkified summary, and description
    * @param {object} issue 
    */
   function createQueryResultRow(issue) {
@@ -49,14 +49,14 @@ function createStatusResultElement(response) {
   
   function createActivityResultElement(xmlDoc) {
     var feed, entries, list;
-    feed = xmlDoc.getElementsByTagName('feed');
+    feed = xmlDoc.getElementsByTagName("feed");
     entries = feed[0].getElementsByTagName("entry");
-    list = document.createElement('ul');
+    list = document.createElement("ul");
   
     for(var e of entries) {
       var html = e.getElementsByTagName("title")[0].innerHTML;
       var updated = e.getElementsByTagName("updated")[0].innerHTML;
-      var item = document.createElement('li');
+      var item = document.createElement("li");
       item.innerHTML = new Date(updated).toLocaleString() + " - " + domify(html);
       list.appendChild(item);
     }
@@ -70,6 +70,6 @@ function createStatusResultElement(response) {
  * @param {string} str 
  */
 function domify(str){
-    var dom = (new DOMParser()).parseFromString('<!doctype html><body>' + str,'text/html');
+    var dom = (new DOMParser()).parseFromString("<!doctype html><body>" + str,"text/html");
     return dom.body.textContent;
   }

@@ -4,12 +4,13 @@ const ACTIVITY_OK = "Activity query: {url}\n";
 const ACTIVITY_NONE = "There are no activity results.";
 const STATUS_OK = "Query term: {url}\n";
 const STATUS_NONE = "There are no status results.";
-
+const PERFORMING_SEARCH = "Performing JIRA search for ";
+const LOGIN_MESSAGE = "You must be logged in to JIRA to see this project.";
 
 /**
  * Check for the existence of the project and add event listeners
  */
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener("DOMContentLoaded", function() {
   var url;
   // if logged in, setup listeners
     checkProjectExists().then(function() {
@@ -37,8 +38,8 @@ async function checkProjectExists(){
   try {
     return await makeRequest("https://jira.secondlife.com/rest/api/2/project/SUN", "json");
   } catch (errorMessage) {
-    document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-    document.getElementById('status').hidden = false;
+    document.getElementById("status").innerHTML = "ERROR. " + errorMessage;
+    document.getElementById("status").hidden = false;
   }
 }
 
@@ -47,12 +48,12 @@ async function checkProjectExists(){
  */
 function loadOptions(){
   chrome.storage.sync.get({
-    project: 'Sunshine',
-    user: 'nyx.linden',
+    project: "Sunshine",
+    user: "nyx.linden",
     daysPast: 1,
   }, function(items) {
-    document.getElementById('project').value = items.project;
-    document.getElementById('user').value = items.user;
+    document.getElementById("project").value = items.project;
+    document.getElementById("user").value = items.user;
     document.getElementById("daysPast").value = items.daysPast;
   });
 }
@@ -65,7 +66,7 @@ function loadOptions(){
 async function makeRequest(url, responseType) {
   return new Promise(function(resolve, reject) {
     var req = new XMLHttpRequest();
-    req.open('GET', url);
+    req.open("GET", url);
     req.responseType = responseType;
 
     req.onload = function() {
@@ -83,7 +84,7 @@ async function makeRequest(url, responseType) {
     }
     req.onreadystatechange = function() { 
       if(req.readyState == 4 && req.status == 401) { 
-          reject("You must be logged in to JIRA to see this project.");
+          reject(LOGIN_MESSAGE);
       }
     }
 
@@ -97,8 +98,8 @@ async function makeRequest(url, responseType) {
  * @param {string} errorMessage 
  */
 function displayError(errorMessage) {
-  document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-  document.getElementById('status').hidden = false;
+  document.getElementById("status").innerHTML = "ERROR. " + errorMessage;
+  document.getElementById("status").hidden = false;
 }
 
 /**
@@ -122,8 +123,8 @@ function performQueryJson(url) {
  * @param {string} url 
  */
 function performQuery(url, responseType) {
-  document.getElementById('status').innerHTML = 'Performing JIRA search for ' + url;
-  document.getElementById('status').hidden = false;  
+  document.getElementById("status").innerHTML = PERFORMING_SEARCH + url;
+  document.getElementById("status").hidden = false;  
   // perform the search
   return makeRequest(url, responseType);
 }
@@ -185,16 +186,16 @@ function displayStatusResults(response) {
  * @param {string} statusNone 
  */
 function displayResults(list, url, statusOk, statusNone) {
-  var resultDiv = document.getElementById('query-result');
+  var resultDiv = document.getElementById("query-result");
   // render the results
-  document.getElementById('status').innerHTML = statusOk.replace(/\{url\}/, url);
-  document.getElementById('status').hidden = false;
+  document.getElementById("status").innerHTML = statusOk.replace(/\{url\}/, url);
+  document.getElementById("status").hidden = false;
   
   if(list.childNodes.length > 0){
     resultDiv.innerHTML = list.outerHTML;
   } else {
-    document.getElementById('status').innerHTML = statusNone;
-    document.getElementById('status').hidden = false;
+    document.getElementById("status").innerHTML = statusNone;
+    document.getElementById("status").hidden = false;
   }
   resultDiv.hidden = false;
 }
