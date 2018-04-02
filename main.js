@@ -1,14 +1,25 @@
-function getJIRAFeed(callback, errorCallback){
+const ACTIVITY_URL = "https://jira.secondlife.com/activity?maxResults=50&streams=user+IS+{}&providers=issues";
+
+/**
+ * Grabs the user value from the DOM, creates an api call URL with it and makes a request to that URL
+ * @param {function(string, object)} callback 
+ * @param {function(string)} errorCallback 
+ */
+function getJiraFeed(callback, errorCallback){
     var user = document.getElementById("user").value;
-    if(user == undefined) return;
+    var url;
+    if(user === undefined)
+      return;
     
-    var url = "https://jira.secondlife.com/activity?maxResults=50&streams=user+IS+"+user+"&providers=issues";
-    make_request(url, "").then(function(response) {
+    url = ACTIVITY_URL.replace(/\{\}/, user);
+    makeRequest(url, "").then(function(response) {
       // empty response type allows the request.responseXML property to be returned in the makeRequest call
       callback(url, response);
     }, errorCallback);
 }
+
 /**
+ * Retrieve the results of the Jira feed query
  * @param {string} searchTerm - Search term for JIRA Query.
  * @param {function(string)} callback - Called when the query results have been  
  *   formatted for rendering.
@@ -16,14 +27,18 @@ function getJIRAFeed(callback, errorCallback){
  */
 async function getQueryResults(s, callback, errorCallback) {                                                 
     try {
-      var response = await make_request(s, "json");
+      var response = await makeRequest(s, "json");
       callback(createHTMLElementResult(response));
     } catch (error) {
       errorCallback(error);
     }
 }
 
-function make_request(url, responseType) {
+/**
+ * @param {string} url 
+ * @param {string} responseType 
+ */
+async function makeRequest(url, responseType) {
   return new Promise(function(resolve, reject) {
     var req = new XMLHttpRequest();
     req.open('GET', url);
@@ -52,8 +67,6 @@ function make_request(url, responseType) {
     req.send();
   });
 }
-
-
 
 function loadOptions(){
   chrome.storage.sync.get({
@@ -93,7 +106,7 @@ function domify(str){
 
 function checkProjectExists(){
     try {
-      return await make_request("https://jira.secondlife.com/rest/api/2/project/SUN", "json");
+      return await makeRequest("https://jira.secondlife.com/rest/api/2/project/SUN", "json");
     } catch (errorMessage) {
       document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
       document.getElementById('status').hidden = false;
