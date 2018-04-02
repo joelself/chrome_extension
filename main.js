@@ -1,40 +1,64 @@
-const ACTIVITY_URL = "https://jira.secondlife.com/activity?maxResults=50&streams=user+IS+{}&providers=issues";
+const ACTIVITY_URL = "https://jira.secondlife.com/activity?maxResults=50&streams=user+IS+{user}&providers=issues";
+const STATUS_URL = "https://jira.secondlife.com/rest/api/2/search?jql=project={project}+and+status={status}+and+status+changed+to+{status}+before+-{inStatusFor}d&fields=id,status,key,assignee,summary&maxresults=100`";
+const ACTIVITY_OK = "Activity query: {url}\n";
+const ACTIVITY_NONE = "There are no activity results.";
+const STATUS_OK = "Query term: {url}\n";
+const STATUS_NONE = "There are no status results.";
+
 
 /**
- * Grabs the user value from the DOM, creates an api call URL with it and makes a request to that URL
- * @param {function(string, object)} callback 
- * @param {function(string)} errorCallback 
+ * Check for the existence of the project and add event listeners
  */
-function getJiraFeed(callback, errorCallback){
-    var user = document.getElementById("user").value;
-    var url;
-    if(user === undefined)
-      return;
-    
-    url = ACTIVITY_URL.replace(/\{\}/, user);
-    makeRequest(url, "").then(function(response) {
-      // empty response type allows the request.responseXML property to be returned in the makeRequest call
-      callback(url, response);
-    }, errorCallback);
+document.addEventListener('DOMContentLoaded', function() {
+  var url;
+  // if logged in, setup listeners
+    checkProjectExists().then(function() {
+      //load saved options
+      loadOptions();
+
+      // query click handler
+      document.getElementById("query").onclick = function(){
+        // build query, perform query, display results
+        buildJql().then(performQueryJson, displayError).then(displayStatusResults, displayError);
+      };
+      // activity feed click handler
+      document.getElementById("feed").onclick = function(){   
+        // get the xml feed, perform query, display results
+        getJiraFeedUrl().then(performQueryEmpty, displayError).then(displayActivityResults, displayError);    
+      };        
+
+    }).catch(displayError);   
+});
+
+/**
+ * Make a query to check if the project exists
+ */
+async function checkProjectExists(){
+  try {
+    return await makeRequest("https://jira.secondlife.com/rest/api/2/project/SUN", "json");
+  } catch (errorMessage) {
+    document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
+    document.getElementById('status').hidden = false;
+  }
 }
 
 /**
- * Retrieve the results of the Jira feed query
- * @param {string} searchTerm - Search term for JIRA Query.
- * @param {function(string)} callback - Called when the query results have been  
- *   formatted for rendering.
- * @param {function(string)} errorCallback - Called when the query or call fails.
+ * Set some default values into the form to make debugging easier
  */
-async function getQueryResults(s, callback, errorCallback) {                                                 
-    try {
-      var response = await makeRequest(s, "json");
-      callback(createHTMLElementResult(response));
-    } catch (error) {
-      errorCallback(error);
-    }
+function loadOptions(){
+  chrome.storage.sync.get({
+    project: 'Sunshine',
+    user: 'nyx.linden',
+    daysPast: 1,
+  }, function(items) {
+    document.getElementById('project').value = items.project;
+    document.getElementById('user').value = items.user;
+    document.getElementById("daysPast").value = items.daysPast;
+  });
 }
 
 /**
+ * Make an AJAX request against the url, with the requested response type. Returns a promise
  * @param {string} url 
  * @param {string} responseType 
  */
@@ -50,7 +74,7 @@ async function makeRequest(url, responseType) {
         reject(response.errorMessages[0]);
         return;
       }
-      resolve(response);
+      resolve({response: response, url: url});
     };
 
     // Handle network errors
@@ -68,119 +92,111 @@ async function makeRequest(url, responseType) {
   });
 }
 
-function loadOptions(){
-  chrome.storage.sync.get({
-    project: 'Sunshine',
-    user: 'nyx.linden'
-  }, function(items) {
-    document.getElementById('project').value = items.project;
-    document.getElementById('user').value = items.user;
-  });
+/**
+ * Display an error message
+ * @param {string} errorMessage 
+ */
+function displayError(errorMessage) {
+  document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
+  document.getElementById('status').hidden = false;
 }
-function buildJQL(callback) {
-  var callbackBase = "https://jira.secondlife.com/rest/api/2/search?jql=";
-  var project = document.getElementById("project").value;
-  var status = document.getElementById("statusSelect").value;
-  var inStatusFor = document.getElementById("daysPast").value
-  var fullCallbackUrl = callbackBase;
-  fullCallbackUrl += `project=${project}+and+status=${status}+and+status+changed+to+${status}+before+-${inStatusFor}d&fields=id,status,key,assignee,summary&maxresults=100`;
-  callback(fullCallbackUrl);
+
+/**
+ * Perform query using the url and empty response type and display current status
+ * @param {string} url 
+ */
+function performQueryEmpty(url) {
+  return performQuery(url, "");
 }
-function createHTMLElementResult(response){
 
-// 
-// Create HTML output to display the search results.
-// results.json in the "json_results" folder contains a sample of the API response
-// hint: you may run the application as well if you fix the bug. 
-// 
+/**
+ * Perform query using the url and json response type and display current status
+ * @param {string} url 
+ */
+function performQueryJson(url) {
+  return performQuery(url, "json");
+}
 
-  return '<p>There may be results, but you must read the response and display them.</p>';
+/**
+ * Perform query using the url and responseType and display current status
+ * @param {string} url 
+ */
+function performQuery(url, responseType) {
+  document.getElementById('status').innerHTML = 'Performing JIRA search for ' + url;
+  document.getElementById('status').hidden = false;  
+  // perform the search
+  return makeRequest(url, responseType);
+}
+
+/**
+ * Grabs the user value from the DOM and returns an activity URL containing the user name.
+ * No validation because it appears any and all characters are allowed in JIRA user names.
+ */
+async function getJiraFeedUrl(){
+  var user = document.getElementById("user").value;
+  if(user == null)
+    return;
   
+  return ACTIVITY_URL.replace(/\{user\}/, user);
 }
 
-// utility 
-function domify(str){
-  var dom = (new DOMParser()).parseFromString('<!doctype html><body>' + str,'text/html');
-  return dom.body.textContent;
+/**
+ * Build a Jira Ticket Status query from form values. Return the query URL. 
+ */
+async function buildJql() {
+  var project, status, inStatusFor;
+  project = document.getElementById("project").value;
+  status = document.getElementById("statusSelect").value;
+  inStatusFor = document.getElementById("daysPast").value
+  return STATUS_URL.replace(/\{project\}/, project).replace(/\{status\}/g, status).replace(/\{inStatusFor\}/, inStatusFor)
 }
 
-function checkProjectExists(){
-    try {
-      return await makeRequest("https://jira.secondlife.com/rest/api/2/project/SUN", "json");
-    } catch (errorMessage) {
-      document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-      document.getElementById('status').hidden = false;
-    }
+/**
+ * Given a response to a activity query format and display the results or error
+ * @param {object} response 
+ */
+function displayActivityResults(response) {
+  var xmlDoc, url, feed, entries, list;
+  xmlDoc = response.response;
+  url = response.url;
+  list = createActivityResultElement(xmlDoc);
+  // render result
+  displayResults(list, url, ACTIVITY_OK, ACTIVITY_NONE);
 }
 
-// Setup
-document.addEventListener('DOMContentLoaded', function() {
-  // if logged in, setup listeners
-    checkProjectExists().then(function() {
-      //load saved options
-      loadOptions();
+/**
+ * Create and display the html results of a status query
+ * @param {object} response 
+ */
+function displayStatusResults(response) {
+  var json, url, list;
+  json = response.response;
+  url = response.url;
+  list = createStatusResultElement(json);
+  // render the results
+  displayResults(list, url, STATUS_OK, STATUS_NONE);
+}
 
-      // query click handler
-      document.getElementById("query").onclick = function(){
-        // build query
-        buildJQL(function(url) {
-          document.getElementById('status').innerHTML = 'Performing JIRA search for ' + url;
-          document.getElementById('status').hidden = false;  
-          // perform the search
-          getQueryResults(url, function(return_val) {
-            // render the results
-            document.getElementById('status').innerHTML = 'Query term: ' + url + '\n';
-            document.getElementById('status').hidden = false;
-            
-            var jsonResultDiv = document.getElementById('query-result');
-            jsonResultDiv.innerHTML = return_val;
-            jsonResultDiv.hidden = false;
+/**
+ * Generic list and status display
+ * @param {Element} list 
+ * @param {string} url 
+ * @param {string} statusOk 
+ * @param {string} statusNone 
+ */
+function displayResults(list, url, statusOk, statusNone) {
+  var resultDiv = document.getElementById('query-result');
+  // render the results
+  document.getElementById('status').innerHTML = statusOk.replace(/\{url\}/, url);
+  document.getElementById('status').hidden = false;
+  
+  if(list.childNodes.length > 0){
+    resultDiv.innerHTML = list.outerHTML;
+  } else {
+    document.getElementById('status').innerHTML = statusNone;
+    document.getElementById('status').hidden = false;
+  }
+  resultDiv.hidden = false;
+}
 
-          }, function(errorMessage) {
-              document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-              document.getElementById('status').hidden = false;
-          });
-        });
-      }
 
-      // activity feed click handler
-      document.getElementById("feed").onclick = function(){   
-        // get the xml feed
-        getJIRAFeed(function(url, xmlDoc) {
-          document.getElementById('status').innerHTML = 'Activity query: ' + url + '\n';
-          document.getElementById('status').hidden = false;
-
-          // render result
-          var feed = xmlDoc.getElementsByTagName('feed');
-          var entries = feed[0].getElementsByTagName("entry");
-          var list = document.createElement('ul');
-
-          for (var index = 0; index < entries.length; index++) {
-            var html = entries[index].getElementsByTagName("title")[0].innerHTML;
-            var updated = entries[index].getElementsByTagName("updated")[0].innerHTML;
-            var item = document.createElement('li');
-            item.innerHTML = new Date(updated).toLocaleString() + " - " + domify(html);
-            list.appendChild(item);
-          }
-
-          var feedResultDiv = document.getElementById('query-result');
-          if(list.childNodes.length > 0){
-            feedResultDiv.innerHTML = list.outerHTML;
-          } else {
-            document.getElementById('status').innerHTML = 'There are no activity results.';
-            document.getElementById('status').hidden = false;
-          }
-          
-          feedResultDiv.hidden = false;
-
-        }, function(errorMessage) {
-          document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-          document.getElementById('status').hidden = false;
-        });    
-      };        
-
-    }).catch(function(errorMessage) {
-        document.getElementById('status').innerHTML = 'ERROR. ' + errorMessage;
-        document.getElementById('status').hidden = false;
-    });   
-});
